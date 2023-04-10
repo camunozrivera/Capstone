@@ -1,26 +1,28 @@
 ---
 title: 'HEALTH mom data analysis'
 author: "Alejandra Muñoz-Rivera"
-date: '3/3/23'
+date: '4/9/23'
 ---
 #Open librarys 
 ```{r}
-pacman::p_load(VIM, mice, lattice, ggplot2, tidyverse, foreign, table1, haven, labelled, boot, tableone, readr, nnet, MASS, funModeling, brant, broom, finalfit, dplyr, knitr, kableExtra, gridExtra, boot, multcomp, lmtest, odds.n.ends, blorr, car, jtools, broom, openxlsx)
+pacman::p_load(VIM, mice, lattice, ggplot2, tidyverse, foreign, table1, haven, labelled, boot, tableone, readr, nnet, MASS, funModeling, brant, broom, finalfit, dplyr, knitr, kableExtra, gridExtra, boot, multcomp, lmtest, odds.n.ends, blorr, car, jtools, broom, openxlsx, brant)
 ```
  
 #import datasets 
 ```{r}
-#formats <-read_sas("/Users/alemunoz/Desktop/BrownSchool/Fall22/Capstone/Data/formats.sas7bcat")
+#import demographic baseline parent dataset 
 par_bl <-read_sas("/Users/alemunoz/Desktop/BrownSchool/Fall22/Capstone/Data/par_bl_12sep2022.sas7bdat")
+
+#import PSI baseline parent dataset 
 par_psi <-read_sas("/Users/alemunoz/Desktop/BrownSchool/Fall22/Capstone/Data/par_psi_12sep2022.sas7bdat")
-par_screen <-read_sas("/Users/alemunoz/Desktop/BrownSchool/Fall22/Capstone/Data/par_screen_12sep2022.sas7bdat")
+
 
 ```
 
 #Clean data Mom BL data 
 
 ```{r}
-class(par_bl$'_ethnicity')
+
 var_label(par_bl) <- NULL #drop labels 
 
 #rename funny labelled variables
@@ -39,7 +41,7 @@ Mom$race <-as.factor(Mom$race)
 
 
 ```{r}
-#Create smaller dataset 
+#Create smaller dataset w/ variables of interest from demographic dataset 
 Mom <-par_bl %>% 
   dplyr::select(study_id,dem1, ethnicity, race, dem5, dem6, dem7, fi) #
 
@@ -48,15 +50,6 @@ Mom$ethnicity <-as.factor(Mom$ethnicity)
 Mom$race <-as.factor(Mom$race)
 class(Mom$ethnicity)
 class(Mom$race)
-Mom$raceth <-as.factor(Mom$raceth)
-class(Mom$raceth)
-
-
-#recode age 
-Mom$dem1 <- as.numeric(Mom$dem1)
-class(Mom$dem1)
-Mom <- rename(Mom, "Age" = dem1)
-#Mom$govtassist <- as.factor(Mom$govtassist)
 
 #recode all variables 
 Mom <- Mom %>%
@@ -99,7 +92,7 @@ Mom <- Mom %>%
                                   `4` = "Some college",
                                   `5` = "Technical or vocational school",
                                   `6` = "College or university graduate", 
-                                  `7` = "Graduate or professional school"))
+                                  `7` = "Graduate or professional school")) 
 
 
 
@@ -108,31 +101,35 @@ Mom <- Mom %>%
 #Clean PSI data set 
 ```{r}
 var_label(par_psi) <- NULL #drop labels 
-#par_psi<-rename(par_psi, c('visit'='_visit', 'trt' = '_trt')) #rename funky variable names 
-#par_psi<-rename(par_psi, c('date' = '_max_date'))
+#rename funky variable names 
+par_psi<-rename(par_psi, c('visit'='_visit', 'trt' = '_trt')) 
+par_psi<-rename(par_psi, c('date' = '_max_date'))
+
+#create smaller dataset for PSI data
 psi <- par_psi %>% dplyr::select(study_id, psi5, psi6, psi7, psi8, psi9, psi10, )
 
+#recode PSI variables of interest
 psi <- psi %>%
   mutate(snacks= recode_factor(.x = psi5, 
-                                  `1` = "Increased",
-                                  `2` = "Decreased",
                                   `3` = "Stayed the same",
-                                  `4` = "I have not noticed"))%>%
+                                  `4` = "Stayed the same",   
+                                  `1` = "Increased",
+                                  `2` = "Decreased"))%>%
   mutate(veggies= recode_factor(.x = psi6, 
-                                  `1` = "Increased",
-                                  `2` = "Decreased",
                                   `3` = "Stayed the same",
-                                  `4` = "I have not noticed"))%>%
+                                  `4` = "Stayed the same",
+                                  `1` = "Increased",
+                                  `2` = "Decreased"))%>%
   mutate(eating= recode_factor(.x = psi7, 
-                                  `1` = "Increased",
-                                  `2` = "Decreased",
                                   `3` = "Stayed the same",
-                                  `4` = "I have not noticed"))%>%
+                                  `4` = "Stayed the same",
+                                  `1` = "Less Healthy",
+                                  `2` = "More Healthy",))%>%
   mutate(weight= recode_factor(.x = psi8, 
-                                  `1` = "Increased",
-                                  `2` = "Decreased",
                                   `3` = "Stayed the same",
-                                  `4` = "I have not noticed"))%>%
+                                  `4` = "Stayed the same",
+                                  `1` = "Gained weight",
+                                  `2` = "Lost weight"))%>%
   mutate(incomech= recode_factor(.x = psi9, 
                                   `1` = "No change",
                                   `2` = "Small change",
@@ -145,25 +142,24 @@ psi <- psi %>%
                                   `4` = "Severe change"))
 
 psi <- drop_na(psi)
+
 ```
 
 ```{r}
-#Merge bl and psi by study ID -- can I get data for other timepoints?
+#Merge bl and psi by study ID 
 total <- merge(Mom, psi, by=c("study_id"), all.x = TRUE, all.y = TRUE)
-#total1 <-drop_na(total)
-
-#merged data with only complete cases N=20
-#total_complete <- drop_na(total$fi, total$snacks, total$veggies, total$eating, total$weight, #total$incomech, total$faccess)
+total <- total %>% dplyr::select(-c(dem5, dem6, dem7, psi5, psi6, psi7, psi8, psi9, psi10, faccess, Age, ethnicity, race, raceth))
+total <-drop_na(total)
 
 #missing data patterns 
-md.pattern(total_in1, rotate.names=TRUE)
-md.pairs(total1)
+md.pattern(total, rotate.names=TRUE)
+md.pairs(total)
 
-#imputed
+#impute data 
 total_in1<-droplevels(total)
-total_in2<-mice(total_in1, m=10, maxit=5, seed=219) 
-#warning in terminal Warning: Number of logged events: 676
+total_in2<-mice(total, m=5, maxit=5, seed=219) 
 total_in2
+print(total_in2)
 ```
 
 
@@ -180,7 +176,7 @@ label(total$edu) <- "Education level"
 label(total$raceth) <- "Race/Ethnicity"
 
 #descriptives table 
-table1(~Age + raceth + marital + income + edu + fi, total)
+table1(~Age + raceth + marital + income + edu + fi, Mom)
 
 ```
 
@@ -195,20 +191,19 @@ Low correlation between psi5 and psi7 and between psi6 and psi7. Therefore, I wi
 #Models 
 ```{r}
 #model with incidence of snacks with complete data only
-model1 <- polr(snacks ~ fi + incomech + edu, Hess=TRUE, data=total1)
+model1 <- polr(snacks ~ fi + incomech + edu, Hess=TRUE, data=total)
 # odds ratios and 95%CIs
 data <- tidy(model1, conf.int=TRUE, exponentiate = TRUE)
 
 
 #model with incidence of snacks with inputed data
-model1imp <- with(total_in2, polr(snacks ~ fi + incomech + edu, Hess=TRUE))
+model1imp <- with(total_in2, multinom(snacks ~ fi + incomech + edu))
 #odds ratios and 95CIs - calculated log odds and exponentiate 
 Table2 <- summary(pool(model1imp),  conf.int = TRUE, exponentiate = TRUE)
+Table2
 
-#export to Excel 
-write.xlsx(Table2, file="HeatlhMom.xlsx", sheetName = "Table 2. inc. snacks", showNA=TRUE, append = TRUE)
 ```
-Food security status does not predict incidence of snacks with complete data or inputed data. 
+Food security status only incidence of snacks with inputed data when comparing decreasing snack incidence vs staying the same. 
 
 
 ```{r}
@@ -217,50 +212,44 @@ model2 <- polr(veggies ~ fi + incomech + edu, Hess=TRUE, data=total1)
 # odds ratios and 95%CIs
 tidy(model4, conf.int=TRUE, exponentiate = TRUE, p.values=TRUE)
 
-#model with incidence of fruits and veggies with inputed data
-model2imp <- with(total_in2, polr(veggies ~ fi + incomech + edu, Hess=TRUE))
+#model with fruits and veggies with inputed data
+model2imp <- with(total_in2, multinom(veggies ~ fi + incomech + edu))
 #odds ratios and 95CIs - calculated log odds and exponentiate 
 Table3 <- summary(pool(model2imp),  conf.int = TRUE, exponentiate = TRUE)
-
-#export to Excel 
-write.xlsx(Table3, file="HeatlhMom.xlsx", sheetName = "Table 3. inc. fruits/veggies", showNA=TRUE, append = TRUE)
-
+Table3
 ```
 Food security does not predict incidence of fruit and veggie consumption with either dataset. 
 
 ```{r}
 #model with incidence of eating habits with complete data only
 model3 <- polr(eating ~ fi + incomech + edu, Hess=TRUE, data=total1)
-# odds ratios and 95%CIs
-tidy(model5, conf.int=TRUE, exponentiate = TRUE, p.values=TRUE)
+#odds ratios and 95%CIs
+tidy(model3, conf.int=TRUE, exponentiate = TRUE, p.values=TRUE)
 
 #model with incidence of eating habits with inputed data
-model3imp <- with(total_in2, polr(eating ~ fi + incomech + edu, Hess=TRUE))
+model3imp <- with(total_in2, multinom(eating ~ fi + incomech + edu))
 #odds ratios and 95CIs - calculated log odds and exponentiate 
 Table4 <- summary(pool(model3imp),  conf.int = TRUE, exponentiate = TRUE)
-
-#export to Excel 
-write.xlsx(Table4, file="HeatlhMom.xlsx", sheetName = "Table 4. change in eating habits", showNA=TRUE, append = TRUE)
+Table4
 
 ```
 Food security does not predict precieved eating habits with either data set. 
 
 
 ```{r}
-#model with incidence of snacks with complete data only (uses psi9 as income change variable)
-model4 <- polr(weight ~ fi + incomech + edu, Hess=TRUE, data=total1)
+#model with precieved weight change with complete data only
+model4 <- multinom(weight ~ fi + incomech + edu, data=total)
 # odds ratios and 95%CIs
 tidy(model4, conf.int=TRUE, exponentiate = TRUE, p.values=TRUE)
 
-#model with incidence of snacks with inputed data
-model4imp <- with(total_in2, polr(weight ~ fi + incomech + edu, Hess=TRUE))
+#model with precieved weight change with inputed data
+model4imp <- with(total_in2, multinom(weight ~ fi + incomech + edu, Hess=TRUE))
 #odds ratios and 95CIs - calculated log odds and exponentiate 
 Table5 <- summary(pool(model4imp),  conf.int = TRUE, exponentiate = TRUE)
-
-#export to Excel 
-write.xlsx(Table5, file="HeatlhMom.xlsx", sheetName = "Table 5. change in weight", showNA=TRUE, append = TRUE)
+Table5
 
 ```
 Food security status does not predict incidence of snacks with either data set. 
+
 
 
