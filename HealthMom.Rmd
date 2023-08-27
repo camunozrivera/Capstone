@@ -176,7 +176,8 @@ label(total$edu) <- "Education level"
 label(total$raceth) <- "Race/Ethnicity"
 
 #descriptives table 
-table1(~Age + raceth + marital + income + edu + fi, Mom)
+table1(~Age + raceth + marital + income + edu + fi, Mom) 
+
 
 ```
 
